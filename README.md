@@ -1,23 +1,13 @@
-# Getting started with github-guard
+# 🛡️ GitHub Guard
 
-Your project has been created using a Devvit template.
+**GitHub Guard** is a security and quality-control automation built specifically for software-focused subreddits like **r/macos**.
 
-## Next up
+### 🔍 How it Works
+When a user posts a link to a GitHub repository, the bot instantly queries the GitHub API to verify the "reputation" of the project. If the repository is less than **30 days old** or has **fewer than 5 stars**, the bot automatically:
 
-Next up is uploading and developing your app using playtest.
+* **Removes the post** to prevent the spread of unvetted scripts or potential malware.
+* **Leaves a detailed comment** explaining the subreddit's security policy.
+* **Provides instructions** on how legitimate developers can get their projects manually approved by the mod team.
 
-In the project directory, you can run:
-
-### `npm run deploy`
-
-Upload the app to the App Directory. Uploaded apps are only visible to you (the app owner) and can only be installed to a small test subreddit with less than 200 subscribers.
-
-### `npm run dev`
-
-Installs your app to your test subreddit and starts a playtest session where a new version is installed whenever you save changes to your app code, and logs are continuously streamed.
-
-## Learn more
-
-You can learn more in the [documentation](https://developers.reddit.com/docs/).
-
-You can manage your apps in the [developer portal](https://developers.reddit.com/my/apps).
+### 🎯 Objective
+This ensures that the community only interacts with established, peer-reviewed projects while keeping the moderation queue clean from "drive-by" spam and "empty" repositories.
