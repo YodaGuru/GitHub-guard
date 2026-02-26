@@ -1,0 +1,7 @@
+name: github-guard
+permissions:
+  - http
+  - redditAPI
+  - modmail
+  - read
+  - identity
