@@ -10,29 +10,17 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
   const safeAuthor = authorName || "";
   if (safeAuthor.toLowerCase() === "githubguard") return;
 
-// 1. DYNAMIC APPROVED CHECK
-let isApproved = false;
-try {
-  const subreddit = await context.reddit.getSubredditByName(context.subredditName);
-  
-  // This checks if the person who posted is on the 'Approved' list of the sub
-  const contributors = await subreddit.getApprovedUsers({
-    username: safeAuthor,
-  }).all();
-  
-  // If the list is not empty, they are approved!
-  isApproved = contributors.length > 0;
-
-  // Optional: Also auto-approve Moderators
-  if (!isApproved) {
-      const moderators = await subreddit.getModerators({
-          username: safeAuthor,
-      }).all();
-      isApproved = moderators.length > 0;
-  }
-} catch (e) {
-  console.error("Approved/Mod check failed, defaulting to false.");
-}
+  // 1. DYNAMIC APPROVED/MOD CHECK
+  let isApproved = false;
+  try {
+    const subreddit = await context.reddit.getSubredditByName(context.subredditName);
+    const contributors = await subreddit.getApprovedUsers({ username: safeAuthor }).all();
+    isApproved = contributors.length > 0;
+    if (!isApproved) {
+        const moderators = await subreddit.getModerators({ username: safeAuthor }).all();
+        isApproved = moderators.length > 0;
+    }
+  } catch (e) { console.error("Approved check failed."); }
     
   // 2. IDENTIFY GITHUB LINK
   const githubRegex = /github\.com\/([a-zA-Z0-9-._]+)\/([a-zA-Z0-9-._]+)/i;
@@ -43,32 +31,25 @@ try {
   repo = repo.replace(/\.git$/i, "").replace(/\/$/, "");
           
   try {
-    // API CALL 1: Repository Metadata
-    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-      headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' }
-    });
+    // API CALLS
+    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
     if (!repoRes.ok) return;
     const data = await repoRes.json();
     
-    // API CALL 2: Latest Commit (For Signed Check)
-    const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, {
-      headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' }
-    });
+    const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
     const commitData = await commitRes.json();
     const isSigned = commitData?.[0]?.commit?.verification?.verified || false;
 
-    // API CALL 3: Root Contents (For Install Script Check)
-    const contentsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, {
-      headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' }
-    });
+    const contentsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
     const contentsData = await contentsRes.json();
     const hasInstallScript = Array.isArray(contentsData) && contentsData.some(file => 
       ['install.sh', 'setup.sh', 'install.py', 'setup.py', 'configure'].includes(file.name.toLowerCase())
     );
 
-    // 3. SCORING ENGINE (Out of 6)
+    // 3. SCORING ENGINE
     let score = 0;
     const details = [];
+    const repoNameLower = repo.toLowerCase();
 
     if (data.stargazers_count >= 5) { score++; details.push("✅ Established Community (5+ stars)"); }
     else { details.push("❌ Low Star Count"); }
@@ -86,38 +67,39 @@ try {
     if (data.owner.type === "Organization") { score++; details.push("✅ Verified Organization"); }
     else { details.push("ℹ️ Individual Contributor"); }
 
-    if (isSigned) { score++; details.push("✅ Cryptographically Signed Commits"); }
+    if (isSigned) { score++; details.push("✅ Signed Commits"); }
     else { details.push("ℹ️ Unsigned Commits"); }
 
-    // RISK WARNING
-    let riskWarning = "";
-    if (hasInstallScript) {
-      riskWarning = "\n\n> ⚠️ **High-Risk File Detected:** This repo contains an installation script (`.sh` or `.py`). Use extreme caution before running commands with `sudo`.";
-    }
+    // 4. MALICIOUS PATTERN CHECK
+    const sensitiveKeywords = ['lastpass', 'notion', 'metamask', 'ledger', 'malwarebytes', 'passbolt', 'proton'];
+    const isImpersonating = sensitiveKeywords.some(kw => repoNameLower.includes(kw)) && data.owner.type !== "Organization";
+    const isUltraNewRisk = !isOldEnough && hasInstallScript;
+    
+    const isKnownThreat = isImpersonating || isUltraNewRisk;
 
-    console.log(`[Score] ${owner}/${repo}: ${score}/6`);
-
-    // 4. THE DECISION
-    const MINIMUM_SCORE = 3;
     const auditTrail = details.map(d => `* ${d}`).join('\n');
+    let riskWarning = hasInstallScript ? "\n\n> ⚠️ **High-Risk File Detected:** Contains an installation script (`.sh` or `.py`). Review the code carefully before running with `sudo`." : "";
 
-    if (score < MINIMUM_SCORE && !isApproved) {
-      console.log(`[Action] 🔨 Removing low-trust repo: ${owner}/${repo}`);
+    // 5. ACTION LOGIC
+    if (isKnownThreat && !isApproved) {
+      // NUCLEAR OPTION: REMOVE IMMEDIATELY
       await context.reddit.remove(id, false);
-      
       const reply = await context.reddit.submitComment({
         id: id,
-        text: `🛡️ **GitHub Guard: Content Removed**\n\nThis repository failed our safety audit (**Score: ${score}/6**).\n\n**Trust Report:**\n${auditTrail}${riskWarning}\n\n*If you are the developer, contact mods via Modmail.*`
+        text: `🛡️ **GitHub Guard: Malicious Pattern Detected**\n\nThis repository matches known malware distribution patterns (Impersonation or New Script Risk) and has been removed for community safety.\n\n**Trust Report:**\n${auditTrail}${riskWarning}`
       });
       await reply.distinguish(true);
+      console.log(`[Action] Removed Malicious Pattern: ${owner}/${repo}`);
     } 
     else {
+      // ADVISOR OPTION: POST REPORT ONLY
       const shieldNotice = isApproved ? "\n\n*Note: Verified by Approved User status.*" : "";
       const reply = await context.reddit.submitComment({
         id: id,
-        text: `🔍 **GitHub Guard: Repository Verified**\n\nThis project passed our safety audit (**Score: ${score}/6**).${shieldNotice}\n\n**Trust Report:**\n${auditTrail}${riskWarning}\n\n> **⚠️ Security Reminder:** Always verify source code and run third-party scripts at your own risk.`
+        text: `🔍 **GitHub Guard: Trust Report**\n\nThis project scored **${score}/6** on our safety audit. ${shieldNotice}\n\n**Trust Report:**\n${auditTrail}${riskWarning}\n\n> **⚠️ Security Reminder:** Always verify source code and run third-party scripts at your own risk.`
       });
       await reply.distinguish(true);
+      console.log(`[Scan] Reported ${owner}/${repo}: ${score}/6`);
     }
   } catch (e) { console.error("❌ System Error:", e); }
 }
