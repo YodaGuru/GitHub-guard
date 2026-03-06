@@ -21,7 +21,7 @@ Entity Status: Is the repo owned by a GitHub Organization?
 
 For most projects, the bot will not remove the post. Instead, it will:
 
-Generate a Score (1-6): Providing a snapshot of the project's maturity.
+Generate a Score (1–6): Providing a snapshot of the project's maturity.
 
 Post an Audit Trail: Highlighting exactly which security markers were found.
 
@@ -36,6 +36,12 @@ Impersonation is Detected: The repo uses keywords from sensitive apps (e.g., Las
 Zero-Day Risk: A brand-new repository (under 7 days old) contains an automated installation script.
 
 Known Blacklists: The repo or author matches known databases of malware distributors.
+
+📖 Open Source & Transparency
+
+We believe that a security tool should be as transparent as the projects it audits. The entire source code for GitHub Guard is open-source and available for review. We welcome contributions from the community to improve our detection patterns and scoring logic.
+
+📂 View the Source Code: https://github.com/YodaGuru/GitHub-guard
 
 🎯 Objective
 
