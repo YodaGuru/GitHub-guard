@@ -1,0 +1,14 @@
+{
+    "$schema": "https://developers.reddit.com/schema/v1/config.json",
+    "name": "github-guard",
+    "blocks": {
+      "entry": "src/main.ts"
+    },
+    "permissions": {
+      "reddit": true,
+      "http": {}
+    },
+    "marketingAssets": {
+      "icon": "assets/icon.png"
+    }
+  }
