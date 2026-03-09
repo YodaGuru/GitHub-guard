@@ -1,5 +1,6 @@
 # 🛡️ GitHub Guard
-**GitHub Guard** is a security and quality-control automation built specifically for software-focused subreddits like **r/macos**. It balances community safety with support for open-source developers.
+
+**GitHub Guard** is a security and quality-control automation built specifically for software-focused subreddits like **r/macos**. It balances community safety with support for open-source developers by auditing external links in real-time.
 
 ---
 
@@ -27,8 +28,10 @@ To keep the community safe, the bot maintains a **"Nuclear Option"** for malicio
 
 ---
 
-### 📖 Open Source & Transparency 
-The entire source code for **GitHub Guard** is open-source. We welcome contributions to improve our detection patterns.
+### 🛡️ Privacy & Security Compliance
+* **Data Integrity:** This app does not collect, store, or transmit any user PII (Personally Identifiable Information) to external servers. 
+* **Limited Scope:** All outbound HTTP requests are strictly limited to fetching public repository metadata via the GitHub API.
+* **Transparency:** The entire source code for **GitHub Guard** is open-source. We welcome contributions to improve our detection patterns.
 
 📂 **View the Source:** [github.com/YodaGuru/GitHub-Guard](https://github.com/YodaGuru/GitHub-Guard)
 
