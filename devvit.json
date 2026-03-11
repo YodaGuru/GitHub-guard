@@ -1,14 +1,18 @@
 {
-    "$schema": "https://developers.reddit.com/schema/v1/config.json",
-    "name": "github-guard",
-    "blocks": {
-      "entry": "src/main.ts"
-    },
-    "permissions": {
-      "reddit": true,
-      "http": {}
-    },
-    "marketingAssets": {
-      "icon": "assets/icon.png"
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "github-guard",
+  "blocks": {
+    "entry": "src/main.ts",
+    "triggers": [
+      "onPostCreate",
+      "onCommentCreate",
+      "onCommentUpdate"
+    ]
+  },
+  "permissions": {
+    "reddit": true,
+    "http": {
+      "domains": ["api.github.com"]
     }
   }
+}

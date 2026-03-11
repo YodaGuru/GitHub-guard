@@ -85,10 +85,10 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
       // NUCLEAR OPTION: REMOVE IMMEDIATELY
       await context.reddit.remove(id, false);
       const reply = await context.reddit.submitComment({
-        id: id,
+        id: id, // In 2026, 'id' is often the target parent ID
         text: `🛡️ **GitHub Guard: Malicious Pattern Detected**\n\nThis repository matches known malware distribution patterns (Impersonation or New Script Risk) and has been removed for community safety.\n\n**Trust Report:**\n${auditTrail}${riskWarning}`
       });
-      await reply.distinguish(true);
+      await reply.distinguish(true); // Pins and distinguishes
       console.log(`[Action] Removed Malicious Pattern: ${owner}/${repo}`);
     } 
     else {
@@ -104,9 +104,9 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
   } catch (e) { console.error("❌ System Error:", e); }
 }
 
-// Triggers
+// Triggers (Updated for 2026 SDK)
 Devvit.addTrigger({
-  event: 'PostSubmit',
+  event: 'PostCreate', // Replaces PostSubmit
   onEvent: async (event, context) => {
     const post = await context.reddit.getPostById(event.post.id);
     await scanForGitHub(`${post.title} ${post.url || ''} ${post.body || ''}`, event.post.id, post.authorName, context);
@@ -114,10 +114,10 @@ Devvit.addTrigger({
 });
 
 Devvit.addTrigger({
-  event: 'CommentSubmit',
+  event: 'CommentCreate', // Replaces CommentSubmit
   onEvent: async (event, context) => {
     const comment = await context.reddit.getCommentById(event.comment.id);
-    await scanForGitHub(comment.body, event.comment.id, comment.authorName, context);
+    await scanForGitHub(comment.body || "", event.comment.id, comment.authorName, context);
   },
 });
 
