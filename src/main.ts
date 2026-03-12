@@ -3,7 +3,7 @@ import { Devvit } from '@devvit/public-api';
 Devvit.configure({
   redditAPI: true,
   http: true,
-  modmail: true,
+  // modmail is handled via the Developer Portal settings in this version
 });
 
 async function scanForGitHub(text: string, id: string, authorName: string | undefined, context: any) {
@@ -85,10 +85,10 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
       // NUCLEAR OPTION: REMOVE IMMEDIATELY
       await context.reddit.remove(id, false);
       const reply = await context.reddit.submitComment({
-        id: id, // In 2026, 'id' is often the target parent ID
+        id: id, 
         text: `🛡️ **GitHub Guard: Malicious Pattern Detected**\n\nThis repository matches known malware distribution patterns (Impersonation or New Script Risk) and has been removed for community safety.\n\n**Trust Report:**\n${auditTrail}${riskWarning}`
       });
-      await reply.distinguish(true); // Pins and distinguishes
+      await reply.distinguish(true); 
       console.log(`[Action] Removed Malicious Pattern: ${owner}/${repo}`);
     } 
     else {
@@ -104,18 +104,24 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
   } catch (e) { console.error("❌ System Error:", e); }
 }
 
-// Triggers (Updated for 2026 SDK)
+// Triggers 
 Devvit.addTrigger({
-  event: 'PostCreate', // Replaces PostSubmit
+  event: 'PostCreate', 
   onEvent: async (event, context) => {
+    // Safety Guard: Check if event and post exist before continuing
+    if (!event.post?.id) return;
+
     const post = await context.reddit.getPostById(event.post.id);
     await scanForGitHub(`${post.title} ${post.url || ''} ${post.body || ''}`, event.post.id, post.authorName, context);
   },
 });
 
 Devvit.addTrigger({
-  event: 'CommentCreate', // Replaces CommentSubmit
+  event: 'CommentCreate', 
   onEvent: async (event, context) => {
+    // Safety Guard: Check if event and comment exist before continuing
+    if (!event.comment?.id) return;
+
     const comment = await context.reddit.getCommentById(event.comment.id);
     await scanForGitHub(comment.body || "", event.comment.id, comment.authorName, context);
   },
