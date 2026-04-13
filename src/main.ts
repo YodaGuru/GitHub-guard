@@ -3,6 +3,7 @@ import { Devvit, SettingScope } from '@devvit/public-api';
 Devvit.configure({
   redditAPI: true,
   http: true,
+  redis: true,
 });
 
 Devvit.addSettings([
@@ -39,15 +40,15 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
   let [_, owner, repo] = match;
   repo = repo.replace(/\.git$/i, "").replace(/\/$/, "");
 
-  // 3. KV CACHE CHECK — skip if scanned recently
-  const cacheKey = `gh_scan_${owner}_${repo}`;
-  try {
-    const cached = await context.kvStore.get(cacheKey);
-    if (cached) {
-      console.log(`[Cache] Skipping already-scanned repo: ${owner}/${repo}`);
-      return;
-    }
-  } catch (e) { console.error("KV cache read failed."); }
+// 3. REDIS CACHE CHECK — skip if scanned recently
+const cacheKey = `gh_scan_${owner}_${repo}`;
+try {
+  const cached = await context.redis.get(cacheKey);
+  if (cached) {
+    console.log(`[Cache] Skipping already-scanned repo: ${owner}/${repo}`);
+    return;
+  }
+} catch (e) { console.error("Redis cache read failed."); }
 
   try {
     // BUILD AUTH HEADERS
@@ -72,13 +73,22 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
       ['install.sh', 'setup.sh', 'install.py', 'setup.py', 'configure'].includes(file.name.toLowerCase())
     );
 
-    // SECURITY POLICY CHECK — probe all three known locations in parallel
+    // SECURITY POLICY CHECK — probe all three known locations, treat 404 as false
+    const checkSecurity = async (url: string) => {
+      try {
+        const res = await fetch(url, { method: 'HEAD', headers: ghHeaders });
+        return res.status === 200;
+      } catch (e) {
+        return false;
+      }
+    };
+
     const [secRoot, secDotGithub, secDocs] = await Promise.all([
-      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
-      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/.github/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
-      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/docs/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
+      checkSecurity(`https://api.github.com/repos/${owner}/${repo}/contents/SECURITY.md`),
+      checkSecurity(`https://api.github.com/repos/${owner}/${repo}/contents/.github/SECURITY.md`),
+      checkSecurity(`https://api.github.com/repos/${owner}/${repo}/contents/docs/SECURITY.md`),
     ]);
-    const hasSecurityPolicy = [secRoot, secDotGithub, secDocs].some(r => r.status === 200);
+    const hasSecurityPolicy = secRoot || secDotGithub || secDocs;
 
     // 4. SCORING ENGINE
     let score = 0;
@@ -134,7 +144,7 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
     }
 
     // CACHE RESULT — prevent re-scanning same repo for 1 hour
-    await context.kvStore.set(cacheKey, '1', { ttl: 3600 });
+    await context.redis.set(cacheKey, '1', { expiration: new Date(Date.now() + 3600 * 1000) });
 
   } catch (e) { console.error("❌ System Error:", e); }
 }
