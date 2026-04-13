@@ -1,10 +1,19 @@
-import { Devvit } from '@devvit/public-api';
+import { Devvit, SettingScope } from '@devvit/public-api';
 
 Devvit.configure({
   redditAPI: true,
   http: true,
-  // modmail is handled via the Developer Portal settings in this version
 });
+
+Devvit.addSettings([
+  {
+    name: 'github_token',
+    label: 'GitHub Personal Access Token',
+    type: 'string',
+    isSecret: true,
+    scope: SettingScope.App,
+  },
+]);
 
 async function scanForGitHub(text: string, id: string, authorName: string | undefined, context: any) {
   const safeAuthor = authorName || "";
@@ -17,36 +26,61 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
     const contributors = await subreddit.getApprovedUsers({ username: safeAuthor }).all();
     isApproved = contributors.length > 0;
     if (!isApproved) {
-        const moderators = await subreddit.getModerators({ username: safeAuthor }).all();
-        isApproved = moderators.length > 0;
+      const moderators = await subreddit.getModerators({ username: safeAuthor }).all();
+      isApproved = moderators.length > 0;
     }
   } catch (e) { console.error("Approved check failed."); }
-    
-  // 2. IDENTIFY GITHUB LINK
-  const githubRegex = /github\.com\/([a-zA-Z0-9-._]+)\/([a-zA-Z0-9-._]+)/i;
+
+  // 2. IDENTIFY GITHUB LINK — improved regex to avoid over-matching paths
+  const githubRegex = /github\.com\/([a-zA-Z0-9-._]+)\/([a-zA-Z0-9-._]+?)(?:\/|\.git|$)/i;
   const match = text.match(githubRegex);
   if (!match) return;
-      
+
   let [_, owner, repo] = match;
   repo = repo.replace(/\.git$/i, "").replace(/\/$/, "");
-          
+
+  // 3. KV CACHE CHECK — skip if scanned recently
+  const cacheKey = `gh_scan_${owner}_${repo}`;
   try {
+    const cached = await context.kvStore.get(cacheKey);
+    if (cached) {
+      console.log(`[Cache] Skipping already-scanned repo: ${owner}/${repo}`);
+      return;
+    }
+  } catch (e) { console.error("KV cache read failed."); }
+
+  try {
+    // BUILD AUTH HEADERS
+    const token = await context.settings.get('github_token');
+    const ghHeaders: Record<string, string> = {
+      'User-Agent': 'Devvit-GitHub-Guard-Bot',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
     // API CALLS
-    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
+    const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers: ghHeaders });
     if (!repoRes.ok) return;
     const data = await repoRes.json();
-    
-    const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
+
+    const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits`, { headers: ghHeaders });
     const commitData = await commitRes.json();
     const isSigned = commitData?.[0]?.commit?.verification?.verified || false;
 
-    const contentsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, { headers: { 'User-Agent': 'Devvit-GitHub-Guard-Bot' } });
+    const contentsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, { headers: ghHeaders });
     const contentsData = await contentsRes.json();
-    const hasInstallScript = Array.isArray(contentsData) && contentsData.some(file => 
+    const hasInstallScript = Array.isArray(contentsData) && contentsData.some(file =>
       ['install.sh', 'setup.sh', 'install.py', 'setup.py', 'configure'].includes(file.name.toLowerCase())
     );
 
-    // 3. SCORING ENGINE
+    // SECURITY POLICY CHECK — probe all three known locations in parallel
+    const [secRoot, secDotGithub, secDocs] = await Promise.all([
+      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/.github/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
+      fetch(`https://api.github.com/repos/${owner}/${repo}/contents/docs/SECURITY.md`, { method: 'HEAD', headers: ghHeaders }),
+    ]);
+    const hasSecurityPolicy = [secRoot, secDotGithub, secDocs].some(r => r.status === 200);
+
+    // 4. SCORING ENGINE
     let score = 0;
     const details = [];
     const repoNameLower = repo.toLowerCase();
@@ -61,7 +95,7 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
     if (data.license) { score++; details.push(`✅ Licensed under ${data.license.spdx_id}`); }
     else { details.push("❌ No License Found"); }
 
-    if (data.has_security_policy) { score++; details.push("✅ Security Policy Defined"); }
+    if (hasSecurityPolicy) { score++; details.push("✅ Security Policy Defined"); }
     else { details.push("❌ No Security Policy"); }
 
     if (data.owner.type === "Organization") { score++; details.push("✅ Verified Organization"); }
@@ -70,29 +104,26 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
     if (isSigned) { score++; details.push("✅ Signed Commits"); }
     else { details.push("ℹ️ Unsigned Commits"); }
 
-    // 4. MALICIOUS PATTERN CHECK
+    // 5. MALICIOUS PATTERN CHECK — tightened isUltraNewRisk to require zero stars too
     const sensitiveKeywords = ['lastpass', 'notion', 'metamask', 'ledger', 'malwarebytes', 'passbolt', 'proton'];
     const isImpersonating = sensitiveKeywords.some(kw => repoNameLower.includes(kw)) && data.owner.type !== "Organization";
-    const isUltraNewRisk = !isOldEnough && hasInstallScript;
-    
+    const isUltraNewRisk = !isOldEnough && hasInstallScript && data.stargazers_count === 0;
+
     const isKnownThreat = isImpersonating || isUltraNewRisk;
 
     const auditTrail = details.map(d => `* ${d}`).join('\n');
-    let riskWarning = hasInstallScript ? "\n\n> ⚠️ **High-Risk File Detected:** Contains an installation script (`.sh` or `.py`). Review the code carefully before running with `sudo`." : "";
+    const riskWarning = hasInstallScript ? "\n\n> ⚠️ **High-Risk File Detected:** Contains an installation script (`.sh` or `.py`). Review the code carefully before running with `sudo`." : "";
 
-    // 5. ACTION LOGIC
+    // 6. ACTION LOGIC
     if (isKnownThreat && !isApproved) {
-      // NUCLEAR OPTION: REMOVE IMMEDIATELY
       await context.reddit.remove(id, false);
       const reply = await context.reddit.submitComment({
-        id: id, 
+        id: id,
         text: `🛡️ **GitHub Guard: Malicious Pattern Detected**\n\nThis repository matches known malware distribution patterns (Impersonation or New Script Risk) and has been removed for community safety.\n\n**Trust Report:**\n${auditTrail}${riskWarning}`
       });
-      await reply.distinguish(true); 
+      await reply.distinguish(true);
       console.log(`[Action] Removed Malicious Pattern: ${owner}/${repo}`);
-    } 
-    else {
-      // ADVISOR OPTION: POST REPORT ONLY
+    } else {
       const shieldNotice = isApproved ? "\n\n*Note: Verified by Approved User status.*" : "";
       const reply = await context.reddit.submitComment({
         id: id,
@@ -101,27 +132,27 @@ async function scanForGitHub(text: string, id: string, authorName: string | unde
       await reply.distinguish(true);
       console.log(`[Scan] Reported ${owner}/${repo}: ${score}/6`);
     }
+
+    // CACHE RESULT — prevent re-scanning same repo for 1 hour
+    await context.kvStore.set(cacheKey, '1', { ttl: 3600 });
+
   } catch (e) { console.error("❌ System Error:", e); }
 }
 
-// Triggers 
+// Triggers
 Devvit.addTrigger({
-  event: 'PostCreate', 
+  event: 'PostCreate',
   onEvent: async (event, context) => {
-    // Safety Guard: Check if event and post exist before continuing
     if (!event.post?.id) return;
-
     const post = await context.reddit.getPostById(event.post.id);
     await scanForGitHub(`${post.title} ${post.url || ''} ${post.body || ''}`, event.post.id, post.authorName, context);
   },
 });
 
 Devvit.addTrigger({
-  event: 'CommentCreate', 
+  event: 'CommentCreate',
   onEvent: async (event, context) => {
-    // Safety Guard: Check if event and comment exist before continuing
     if (!event.comment?.id) return;
-
     const comment = await context.reddit.getCommentById(event.comment.id);
     await scanForGitHub(comment.body || "", event.comment.id, comment.authorName, context);
   },
