@@ -116,19 +116,7 @@ export async function handleNukePost(
         : "removed";
 
     if (shouldRemove) {
-      try {
-        await context.modLog.add({
-          action: "removecomment",
-          target: props.postId,
-          details: "comment-mop app",
-          description: `u/${user.username} used comment-mop to ${verbage} all comments of this post.`,
-        });
-      } catch (e: unknown) {
-        console.error(
-          `Failed to add modlog for post: ${props.postId}.`,
-          (e as Error).message
-        );
-      }
+      console.log(`[ModLog] u/${user.username} ${verbage} all comments on post ${props.postId}`);
     }
 
     success = true;
@@ -216,19 +204,7 @@ export async function handleNuke(props: NukeProps, context: Devvit.Context) {
         : "removed";
 
     if (shouldRemove) {
-      try {
-        await context.modLog.add({
-          action: "removecomment",
-          target: props.commentId,
-          details: "comment-mop app",
-          description: `u/${user.username} used comment-mop to ${verbage} this comment and all child comments.`,
-        });
-      } catch (e: unknown) {
-        console.error(
-          `Failed to add modlog for comment: ${props.commentId}.`,
-          (e as Error).message
-        );
-      }
+      console.log(`[ModLog] u/${user.username} ${verbage} comment ${props.commentId} and children`);
     }
 
     success = true;
