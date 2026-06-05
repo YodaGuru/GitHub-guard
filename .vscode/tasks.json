@@ -1,0 +1,64 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🛡️ 1. Safety: Type Check",
+            "type": "shell",
+            "command": "npm run type-check",
+            "problemMatcher": ["$tsc"],
+            "detail": "Run this first! Catches bugs before they reach Reddit."
+        },
+        {
+            "label": "🧪 2. Lab: Playtest",
+            "type": "shell",
+            "command": "npx devvit playtest ${input:targetSub}",
+            "problemMatcher": [],
+            "group": "test",
+            "detail": "Pick a sub to see live code changes."
+        },
+        {
+            "label": "🚀 3. RELEASE: Patch (v1.x.X+1)",
+            "type": "shell",
+            "command": "npx devvit upload --bump patch && npx devvit publish",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "Daily Driver: Bumps the last digit and clears the <200 sub error."
+        },
+        {
+            "label": "🥈 4. MINOR: Bump (v1.X.0)",
+            "type": "shell",
+            "command": "npx devvit upload --bump minor && npx devvit publish",
+            "problemMatcher": [],
+            "detail": "Use for new features. Resets the patch digit to 0."
+        },
+        {
+            "label": "💎 5. MAJOR: Bump (vX.0.0)",
+            "type": "shell",
+            "command": "npx devvit upload --bump major && npx devvit publish",
+            "problemMatcher": [],
+            "detail": "Use for huge milestones. Resets minor/patch to 0."
+        },
+        {
+            "label": "📸 6. Monitor: Live Logs",
+            "type": "shell",
+            "command": "npx devvit logs ${input:targetSub}",
+            "problemMatcher": [],
+            "detail": "Stream production logs from any sub."
+        },
+        {
+            "label": "🔄 7. Maintenance: Update SDK",
+            "type": "shell",
+            "command": "npx devvit update app && npm install",
+            "problemMatcher": [],
+            "detail": "Run once a week to keep your tools fresh."
+        }
+    ],
+    "inputs": [
+        {
+            "id": "targetSub",
+            "type": "promptString",
+            "description": "Subreddit name (e.g., macos)",
+            "default": "macos"
+        }
+    ]
+}
