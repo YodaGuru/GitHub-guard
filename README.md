@@ -46,10 +46,10 @@ GitHub Guard automatically removes posts matching known malicious patterns:
 
 ## ⚙️ Subreddit Configuration
 
-Every setting is configurable per subreddit. Moderators can adjust everything from the App Settings page on new Reddit:
+Every setting is configurable per subreddit. Moderators can adjust everything from the app settings page:
 
 ```
-reddit.com/r/YOURSUBREDDIT/about/apps
+developers.reddit.com/r/YOURSUBREDDIT/apps/github-guard
 ```
 
 **Available settings groups:**
@@ -68,7 +68,6 @@ reddit.com/r/YOURSUBREDDIT/about/apps
 
 **Post menu (new Reddit):**
 - 🛡️ **GitHub Guard: Scan Post** — Manually trigger a scan on any post, bypasses cache
-- 🚩 **Report GitHub Link to Mods** — Available to all users; rate-limited to one report per user per post; sends modmail and logs to the dashboard
 
 **Subreddit menu (new Reddit):**
 - 🛡️ **GitHub Guard: Refresh Dashboard** — Regenerates the mod dashboard wiki page
@@ -86,26 +85,25 @@ old.reddit.com/r/YOURSUBREDDIT/wiki/github-guard-dashboard
 The dashboard shows:
 - 7-day summary (removed / warned / passed counts)
 - Full scan history with repo, score, action, author, post link, and date
-- Pending community reports
 
 > The dashboard is best viewed on old Reddit. New Reddit's visual wiki editor does not render the markdown tables correctly.
 
-Refresh the dashboard any time via the subreddit menu → **🛡️ GitHub Guard: Refresh Dashboard**.
+The dashboard updates automatically after logged scans. Refresh it manually any time via the subreddit menu → **🛡️ GitHub Guard: Refresh Dashboard**.
 
-The dashboard link is also included automatically in every removal comment and every community report modmail, so mods always have it in context when they need it.
+The dashboard link is also included automatically in every removal comment, so mods always have it in context when they need it.
 
 ---
 
 ## 🚀 Installation
 
 1. Install the app from the [Devvit App Directory](https://developers.reddit.com/apps/github-guard)
-2. Go to `reddit.com/r/YOURSUBREDDIT/about/apps` and open GitHub Guard settings
-3. Add your **GitHub Personal Access Token** (required — create one at [github.com/settings/tokens](https://github.com/settings/tokens), no special scopes needed)
+2. Go to `developers.reddit.com/r/YOURSUBREDDIT/apps/github-guard` and open GitHub Guard settings
+3. Optional but recommended: add a **GitHub Personal Access Token** for higher API rate limits (create one at [github.com/settings/tokens](https://github.com/settings/tokens), no special scopes needed)
 4. Enable your subreddit wiki if not already enabled (`reddit.com/r/YOURSUBREDDIT/about/edit` → Wiki → Enabled)
 5. Adjust thresholds and toggles to match your community's standards
 6. Make a test post with a GitHub link to verify the bot is working
 
-> Without a GitHub token the bot will hit GitHub's unauthenticated rate limit of 60 requests/hour, which will cause missed scans on active subreddits.
+> Without a GitHub token the bot uses GitHub's unauthenticated rate limit of 60 requests/hour, which can cause missed scans on active subreddits.
 
 ---
 

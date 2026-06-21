@@ -10,13 +10,14 @@ Devvit.configure({
 // SETTINGS — all values are configurable per-subreddit by moderators
 // ─────────────────────────────────────────────────────────────────────────────
 Devvit.addSettings([
-  // App-level secret (unchanged)
+  // Per-subreddit GitHub token. Installation scope makes this visible to the
+  // moderators configuring the app for their community.
   {
     name: 'github_token',
     label: 'GitHub Personal Access Token',
     type: 'string',
     isSecret: true,
-    scope: SettingScope.App,
+    scope: SettingScope.Installation,
   },
 
   // ── Audit Thresholds ──────────────────────────────────────────────────────
@@ -643,26 +644,18 @@ async function logScanResult(context: any, entry: {
     if (index.length > 50) index.splice(50);
     await context.redis.set('gh_log_index', JSON.stringify(index), { expiration: new Date(Date.now() + 7 * 86_400_000) });
   } catch (e) { console.error('Failed to log scan result:', e); }
+
+  await rebuildWikiDashboard(context);
 }
 
 async function rebuildWikiDashboard(context: any) {
   try {
     const indexRaw = await context.redis.get('gh_log_index').catch(() => null);
-    const flagIndexRaw = await context.redis.get('gh_flag_index').catch(() => null);
     const index: string[] = indexRaw ? JSON.parse(indexRaw) : [];
-    const flagIndex: string[] = flagIndexRaw ? JSON.parse(flagIndexRaw) : [];
 
     // Fetch scan entries
     const entries = (await Promise.all(
       index.map(async (k: string) => {
-        const raw = await context.redis.get(k).catch(() => null);
-        return raw ? JSON.parse(raw) : null;
-      })
-    )).filter(Boolean).sort((a: any, b: any) => b.timestamp - a.timestamp);
-
-    // Fetch flag entries
-    const flags = (await Promise.all(
-      flagIndex.slice(0, 20).map(async (k: string) => {
         const raw = await context.redis.get(k).catch(() => null);
         return raw ? JSON.parse(raw) : null;
       })
@@ -676,12 +669,6 @@ async function rebuildWikiDashboard(context: any) {
       const d = new Date(e.timestamp).toISOString().slice(0, 10);
       const link = `https://reddit.com/r/${context.subredditName}/comments/${e.postId}`;
       return `| [${e.owner}/${e.repo}](https://github.com/${e.owner}/${e.repo}) | ${e.action.toUpperCase()} | ${e.score}/${e.maxScore} | u/${e.author} | [post](${link}) | ${d} |`;
-    }).join('\n');
-
-    const flagRows = flags.map((f: any) => {
-      const d = new Date(f.timestamp).toISOString().slice(0, 10);
-      const link = `https://reddit.com/r/${context.subredditName}/comments/${f.postId}`;
-      return `| [${f.postTitle ?? f.postId}](${link}) | u/${f.reporter} | ${f.status} | ${d} |`;
     }).join('\n');
 
     const wikiContent = [
@@ -703,12 +690,6 @@ async function rebuildWikiDashboard(context: any) {
       '| Repository | Action | Score | Posted by | Post | Date |',
       '|------------|--------|-------|-----------|------|------|',
       rows || '| — | — | — | — | — | — |',
-      '',
-      '## Community Reports (pending)',
-      '',
-      '| Post | Reporter | Status | Date |',
-      '|------|----------|--------|------|',
-      flagRows || '| — | — | — | — |',
     ].join('\n');
 
     const subreddit = await context.reddit.getCurrentSubreddit();
@@ -734,64 +715,9 @@ Devvit.addMenuItem({
   },
 });
 
-// COMMUNITY REPORTING — users can flag a post for mod review
-// ─────────────────────────────────────────────────────────────────────────────
-Devvit.addMenuItem({
-  label: '🚩 Report GitHub Link to Mods',
-  location: 'post',
-  onPress: async (event, context) => {
-    try {
-      const post = await context.reddit.getPostById(event.targetId);
-      const currentUser = await context.reddit.getCurrentUser();
-      const reporter = currentUser?.username ?? 'unknown';
-
-      // Rate limit: one report per user per post
-      const reportKey = `gh_report_${event.targetId}_${reporter}`;
-      const alreadyReported = await context.redis.get(reportKey).catch(() => null);
-      if (alreadyReported) {
-        context.ui.showToast('You have already reported this post.');
-        return;
-      }
-      await context.redis.set(reportKey, '1', { expiration: new Date(Date.now() + 7 * 86_400_000) });
-
-      // Store report for dashboard / mod review
-      const reportEntry = {
-        postId: event.targetId,
-        postTitle: post.title,
-        postUrl: post.url ?? '',
-        reporter,
-        timestamp: Date.now(),
-        status: 'pending',
-      };
-      const rKey = `gh_flagged_${Date.now()}_${event.targetId}`;
-      await context.redis.set(rKey, JSON.stringify(reportEntry), { expiration: new Date(Date.now() + 7 * 86_400_000) });
-
-      // Keep a flagged index for the dashboard
-      const flagIndexRaw = await context.redis.get('gh_flag_index').catch(() => null);
-      const flagIndex: string[] = flagIndexRaw ? JSON.parse(flagIndexRaw) : [];
-      flagIndex.unshift(rKey);
-      if (flagIndex.length > 100) flagIndex.splice(100);
-      await context.redis.set('gh_flag_index', JSON.stringify(flagIndex), { expiration: new Date(Date.now() + 7 * 86_400_000) });
-
-      // Send modmail notification
-      const subreddit = await context.reddit.getCurrentSubreddit();
-      await context.reddit.sendPrivateMessage({
-        to: `/r/${subreddit.name}`,
-        subject: '🚩 GitHub Guard: Community Report',
-        text: `u/${reporter} flagged a post for review:\n\n**Post:** ${post.title}\n**Link:** https://reddit.com${post.permalink}\n**GitHub URL:** ${post.url ?? 'N/A'}\n\n📋 Dashboard: https://old.reddit.com/r/${subreddit.name}/wiki/github-guard-dashboard`,
-      });
-
-      context.ui.showToast('Report submitted — mods have been notified. Thank you!');
-    } catch (e) {
-      console.error('Community report failed:', e);
-      context.ui.showToast('Something went wrong. Please try again.');
-    }
-  },
-});
-
 export default Devvit;
 
-// DEV ONLY — remove before publishing
+// Moderator tool to manually scan a post and bypass normal trigger timing.
 Devvit.addMenuItem({
   label: '🛡️ GitHub Guard: Scan Post',
   location: 'post',
