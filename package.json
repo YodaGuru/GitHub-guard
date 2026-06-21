@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "github-guard",
-  "version": "2.1.0",
+  "version": "2.1.2",
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {
@@ -12,10 +12,10 @@
     "type-check": "tsc --build"
   },
   "dependencies": {
-    "@devvit/public-api": "^0.13.2"
+    "@devvit/public-api": "^0.13.4"
   },
   "devDependencies": {
-    "devvit": "^0.13.2",
+    "devvit": "^0.13.4",
     "dotenv-cli": "8.0.0",
     "typescript": "5.8.3",
     "vitest": "^4.0.18"
