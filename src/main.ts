@@ -509,7 +509,7 @@ async function scanForGitHub(
       : 'Brand-new repository with a zero-star automated install script';
 
     // ── Comment assembly ───────────────────────────────────────────────────
-    const auditTrail = details.map((d) => `* ${d}`).join('\n');
+    const auditTrail = details.map((d) => `* ${d}`).join('\\\n');
     const riskWarning =
       cfg.warnOnSudoScripts && hasInstallScript
         ? '\n\n> ⚠️ **High-Risk File Detected:** Contains an installation script (`.sh` or `.py`). ' +
