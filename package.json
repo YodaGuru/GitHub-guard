@@ -1,21 +1,31 @@
 {
   "private": true,
   "name": "github-guard",
-  "version": "2.1.2",
+  "version": "2.1.6",
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {
     "deploy": "devvit upload",
-    "dev": "devvit playtest r/github_guard_dev --dev",
+    "dev": "devvit playtest formatting_testing",
     "login": "devvit login",
     "launch": "devvit publish",
     "type-check": "tsc --build"
   },
   "dependencies": {
-    "@devvit/public-api": "^0.13.4"
+    "@devvit/cache": "^0.14.4",
+    "@devvit/media": "^0.14.4",
+    "@devvit/protos": "^0.14.4",
+    "@devvit/public-api": "^0.14.4",
+    "@devvit/reddit": "^0.14.4",
+    "@devvit/redis": "^0.14.4",
+    "@devvit/scheduler": "^0.14.4",
+    "@devvit/server": "^0.14.4",
+    "@devvit/settings": "^0.14.4",
+    "@devvit/shared": "^0.14.4",
+    "@devvit/shared-types": "^0.14.4"
   },
   "devDependencies": {
-    "devvit": "^0.13.4",
+    "devvit": "^0.14.4",
     "dotenv-cli": "8.0.0",
     "typescript": "5.8.3",
     "vitest": "^4.0.18"
