@@ -4,15 +4,18 @@
   "blocks": {
     "entry": "src/main.ts",
     "triggers": [
-      "onPostCreate",
-      "onCommentCreate",
-      "onCommentUpdate"
+      "onPostSubmit"
     ]
   },
   "permissions": {
-    "reddit": true,
+    "reddit": {
+      "enable": true
+    },
+    "redis": true,
     "http": {
-      "domains": ["api.github.com"]
+      "domains": [
+        "api.github.com"
+      ]
     }
   }
 }
